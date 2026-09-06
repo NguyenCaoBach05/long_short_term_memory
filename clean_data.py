@@ -19,31 +19,43 @@ df.describe()
 pd.set_option('display.float_format', lambda x: '%.2f' % x)
 df.describe()
 
+#EDA
+#%%
+# 1. Lấy danh sách cột số
+numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
 
-# Lấy tháng xảy ra giá trị max
-peak_month = df.loc[df['milled_products'].idxmax(), 'Date'].month
+# 2. In trực tiếp chi tiết các mốc bất thường theo Z-score để kiểm tra
+for col in ['milled_products', 'fats_oils', 'sugar', 'petroleum', 'fertilizer']:
+    z_score = (df[col] - df[col].mean()) / df[col].std()
+    outlier_mask = z_score.abs() > 3.0
+    if outlier_mask.any():
+        print(f"\n--- Chi tiết bất thường cột: {col} ---")
+        print(df.loc[outlier_mask, ['Date', col]])
 
-# Lọc tất cả các năm có cùng tháng đó để so sánh
-same_months = df[df['Date'].dt.month == peak_month][['Date', 'milled_products']]
-print(same_months)
 
-# nhận thấy năm 2019 có giá trị là cao gấp 10 lần so với các năm khác, nên cho rằng
-# đây là lỗi nhập liệu nên chia cho 10 để đưa về mức bình thường
-import numpy as np
-
-df.loc[43, 'milled_products'] = np.nan
-df['milled_products'] = df['milled_products'].interpolate(method='linear')
-
-# %%
-from statsmodels.tsa.seasonal import seasonal_decompose
+#%%
 import matplotlib.pyplot as plt
+import seaborn as sns
 
-# Đảm bảo index là Date và có tần suất tháng
-df_ts = df.set_index('Date')['milled_products']
-decomp = seasonal_decompose(df_ts, model='additive', period=12)
-
-decomp.plot()
+# Vẽ boxplot để phát hiện ngoại lai nhanh trên toàn bộ 11 cột
+# Chuẩn hóa tạm thời để hiển thị chung một thang đo (vì các loại hàng có sản lượng lệch nhau)
+df_normalized = (df[numeric_cols] - df[numeric_cols].mean()) / df[numeric_cols].std()
+plt.figure(figsize=(14, 6))
+sns.boxplot(data=df_normalized)
+plt.xticks(rotation=45)
+plt.title("Phát hiện ngoại lai nhanh trên toàn bộ 11 cột (Z-score Boxplot)")
 plt.tight_layout()
 plt.show()
 
-# %%
+
+#%% Gộp cột lại thành total_bulk.
+df['total_bulk'] = df[numeric_cols].sum(axis=1)
+
+# Xem thống kê và vẽ đường xu hướng tổng
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(12, 4))
+plt.plot(df['Date'], df['total_bulk'], label='Total Bulk Cargo', color='navy')
+plt.title('Tổng sản lượng hàng rời qua thời gian (Total Bulk Cargo)')
+plt.grid(True)
+plt.show()
